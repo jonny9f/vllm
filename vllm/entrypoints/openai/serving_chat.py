@@ -12,9 +12,11 @@ from vllm.entrypoints.openai.protocol import (
     UsageInfo)
 from vllm.outputs import RequestOutput
 from vllm.entrypoints.openai.serving_engine import OpenAIServing
+from vllm.lora.request import LoRARequest
 
 logger = init_logger(__name__)
 
+Loras = {}
 
 class OpenAIServingChat(OpenAIServing):
 
@@ -67,8 +69,18 @@ class OpenAIServingChat(OpenAIServing):
         except ValueError as e:
             return self.create_error_response(str(e))
 
+        lora_request = None
+
+        if request.lora:
+            if request.lora in Loras:
+                lora_request = Loras[request.lora]
+            else:
+                lora_num = len(Loras) + 1
+                lora_request = LoRARequest( request.lora, lora_num, request.lora )
+                Loras[request.lora] = lora_request
+
         result_generator = self.engine.generate(prompt, sampling_params,
-                                                request_id, token_ids)
+                                                request_id, token_ids, lora_request=lora_request)
         # Streaming response
         if request.stream:
             return self.chat_completion_stream_generator(
